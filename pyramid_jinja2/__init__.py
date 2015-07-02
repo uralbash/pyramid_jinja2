@@ -2,6 +2,7 @@ import inspect
 import os
 import posixpath
 import sys
+import errno
 
 from jinja2 import Environment as _Jinja2Environment
 
@@ -203,9 +204,14 @@ class SmartAssetSpecLoader(FileSystemLoader):
             src = self._get_absolute_source(template)
             if src is not None:
                 return src
-            elif ':' not in template or os.name is not 'nt':
+            else:
                 # fallback to the search path just incase
-                return FileSystemLoader.get_source(self, environment, template)
+                try:
+                    return FileSystemLoader.get_source(self,
+                                                       environment, template)
+                except IOError as e:
+                    if e.errno != errno.EINVAL:
+                        raise
 
         # try to import the template as an asset spec or absolute path
         # relative to its parents
@@ -236,8 +242,13 @@ class SmartAssetSpecLoader(FileSystemLoader):
             try:
                 uri = os.path.join(parent, template)
                 # avoid recursive includes
-                if uri not in rel_chain and (os.name is not 'nt' or ':' not in uri):
-                    return FileSystemLoader.get_source(self, environment, uri)
+                if uri not in rel_chain:
+                    try:
+                        return FileSystemLoader.get_source(self,
+                                                           environment, uri)
+                    except IOError as e:
+                        if e.errno != errno.EINVAL:
+                            raise
             except TemplateNotFound:
                 pass
 
